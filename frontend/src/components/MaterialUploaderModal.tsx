@@ -17,6 +17,7 @@ export default function MaterialUploaderModal({ onClose, onSuccess }: MaterialUp
 
   const [useAi, setUseAi] = useState(true);
   const [aiProvider, setAiProvider] = useState<"gemini" | "openai">("gemini");
+  const [customModel, setCustomModel] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [saveApiKey, setSaveApiKey] = useState(true);
   const [aiStatus, setAiStatus] = useState<{ gemini_configured: boolean; openai_configured: boolean }>({
@@ -51,6 +52,9 @@ export default function MaterialUploaderModal({ onClose, onSuccess }: MaterialUp
       formData.append("save_to_db", "true");
       formData.append("use_ai", String(useAi));
       formData.append("ai_provider", aiProvider);
+      if (customModel.trim()) {
+        formData.append("custom_model", customModel.trim());
+      }
       formData.append("target_duration_min", String(targetDuration));
       formData.append("save_api_key", String(saveApiKey));
       if (apiKey.trim()) {
@@ -73,8 +77,15 @@ export default function MaterialUploaderModal({ onClose, onSuccess }: MaterialUp
       });
 
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || `HTTP ${res.status}`);
+        const textBody = await res.text();
+        let detail = `HTTP ${res.status}`;
+        try {
+          const errData = JSON.parse(textBody);
+          if (errData.detail) detail = errData.detail;
+        } catch {
+          if (textBody) detail = `HTTP ${res.status}: ${textBody.slice(0, 200)}`;
+        }
+        throw new Error(detail);
       }
 
       const data = await res.json();
@@ -170,6 +181,18 @@ export default function MaterialUploaderModal({ onClose, onSuccess }: MaterialUp
                     />
                     記住此金鑰於本機（backend/.env）
                   </label>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    指定模型名稱（選填，留空則自動選用帳號最新可用模型）
+                  </label>
+                  <input
+                    type="text"
+                    value={customModel}
+                    onChange={(e) => setCustomModel(e.target.value)}
+                    placeholder="例如：hydrogen、gemini-3.8-flash、gemini-2.5-pro"
+                    className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs bg-white"
+                  />
                 </div>
               </div>
             )}

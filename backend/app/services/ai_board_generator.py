@@ -94,18 +94,18 @@ def save_ai_key(provider: str, api_key: str) -> None:
     ENV_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def pdf_bytes_to_png_base64_list(pdf_bytes: bytes, max_pages: int = 20) -> List[str]:
-    """將 PDF 每頁渲染為清晰 PNG base64，讓視覺模型直接看懂直式分數與圖形。"""
+def pdf_bytes_to_image_base64_list(pdf_bytes: bytes, max_pages: int = 16) -> List[str]:
+    """將 PDF 每頁渲染為輕量高對比 JPEG base64（大幅縮小體積、加速模型回應並避免逾時）。"""
     doc = pdfium.PdfDocument(pdf_bytes)
     images_b64: List[str] = []
     try:
         total = min(len(doc), max_pages)
         for i in range(total):
             page = doc[i]
-            bitmap = page.render(scale=1.8)
-            pil_img = bitmap.to_pil()
+            bitmap = page.render(scale=1.35)
+            pil_img = bitmap.to_pil().convert("RGB")
             buf = io.BytesIO()
-            pil_img.save(buf, format="PNG", optimize=True)
+            pil_img.save(buf, format="JPEG", quality=80, optimize=True)
             images_b64.append(base64.b64encode(buf.getvalue()).decode("ascii"))
             page.close()
     finally:
@@ -126,8 +126,10 @@ def _extract_json_array(raw_text: str) -> list:
     return json.loads(cleaned)
 
 
-async def _resolve_gemini_models(client: httpx.AsyncClient, api_key: str) -> List[str]:
-    """動態向 Gemini API 查詢此 Key 實際可用的 generateContent 模型，避免寫死模型名稱導致 404。"""
+async def _resolve_gemini_models(
+    client: httpx.AsyncClient, api_key: str, custom_model: Optional[str] = None
+) -> List[str]:
+    """動態向 Gemini API 查詢此 Key 實際可用的 generateContent 模型，支援自訂模型優先。"""
     preferred_order = [
         "gemini-3.8-flash",
         "gemini-3.5-flash",
@@ -147,25 +149,30 @@ async def _resolve_gemini_models(client: httpx.AsyncClient, api_key: str) -> Lis
                 if "generateContent" not in methods:
                     continue
                 name = m.get("name", "").replace("models/", "")
-                if "gemini" in name and "embedding" not in name and "tts" not in name:
+                if ("gemini" in name or "hydrogen" in name) and "embedding" not in name and "tts" not in name:
                     available.append(name)
     except Exception:
         pass
 
-    if not available:
-        return preferred_order
+    ordered: List[str] = []
+    if custom_model and custom_model.strip():
+        ordered.append(custom_model.strip().replace("models/", ""))
 
-    # 優先選擇含 flash 且版本較新的模型，其餘 gemini 模型作為備援
+    if not available:
+        for p in preferred_order:
+            if p not in ordered:
+                ordered.append(p)
+        return ordered
+
     flash_models = sorted([n for n in available if "flash" in n and "lite" not in n], reverse=True)
     other_models = sorted([n for n in available if n not in flash_models], reverse=True)
-    ordered: List[str] = []
     for p in preferred_order:
         if p in available and p not in ordered:
             ordered.append(p)
     for n in flash_models + other_models:
         if n not in ordered:
             ordered.append(n)
-    return ordered[:5]
+    return ordered[:6]
 
 
 async def generate_slides_with_ai(
@@ -173,6 +180,7 @@ async def generate_slides_with_ai(
     target_duration_min: int = 180,
     provider: str = "gemini",
     api_key: Optional[str] = None,
+    custom_model: Optional[str] = None,
     pdf_bytes: Optional[bytes] = None,
     raw_text: Optional[str] = None,
 ) -> List[SlideCreate]:
@@ -186,7 +194,7 @@ async def generate_slides_with_ai(
 
     images_b64: List[str] = []
     if pdf_bytes:
-        images_b64 = pdf_bytes_to_png_base64_list(pdf_bytes)
+        images_b64 = pdf_bytes_to_image_base64_list(pdf_bytes)
 
     user_prompt = (
         f"單元名稱：{unit_title}\n"
@@ -196,13 +204,13 @@ async def generate_slides_with_ai(
     if raw_text and raw_text.strip():
         user_prompt += f"\n\n教材文字內容如下：\n{raw_text.strip()}"
 
-    async with httpx.AsyncClient(timeout=120.0) as client:
+    async with httpx.AsyncClient(timeout=180.0) as client:
         if provider == "gemini":
             parts: list = [{"text": SYSTEM_PROMPT + "\n\n" + user_prompt}]
             for b64 in images_b64:
-                parts.append({"inline_data": {"mime_type": "image/png", "data": b64}})
+                parts.append({"inline_data": {"mime_type": "image/jpeg", "data": b64}})
 
-            candidate_models = await _resolve_gemini_models(client, effective_key)
+            candidate_models = await _resolve_gemini_models(client, effective_key, custom_model=custom_model)
             payload = {
                 "contents": [{"parts": parts}],
                 "generationConfig": {
@@ -233,11 +241,12 @@ async def generate_slides_with_ai(
             content_list: list = [{"type": "text", "text": user_prompt}]
             for b64 in images_b64:
                 content_list.append(
-                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}", "detail": "high"}}
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}", "detail": "high"}}
                 )
             text_out = ""
             last_err = ""
-            for model_name in ("gpt-4o-mini", "gpt-4o"):
+            models_to_try = [custom_model.strip()] if custom_model and custom_model.strip() else ["gpt-4o-mini", "gpt-4o"]
+            for model_name in models_to_try:
                 resp = await client.post(
                     "https://api.openai.com/v1/chat/completions",
                     headers={"Authorization": f"Bearer {effective_key}"},

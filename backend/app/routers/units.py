@@ -156,6 +156,7 @@ async def upload_material(
     use_ai: bool = Form(True),
     ai_provider: str = Form("gemini"),
     api_key: Optional[str] = Form(None),
+    custom_model: Optional[str] = Form(None),
     save_api_key: bool = Form(False),
     target_duration_min: int = Form(180),
     raw_text: Optional[str] = Form(None),
@@ -200,11 +201,12 @@ async def upload_material(
                 target_duration_min=target_duration_min,
                 provider=ai_provider,
                 api_key=api_key,
+                custom_model=custom_model,
                 pdf_bytes=pdf_bytes,
                 raw_text=text_input,
             )
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"AI 生成板書失敗：{exc}")
+            raise HTTPException(status_code=500, detail=f"AI 生成板書失敗：{type(exc).__name__}: {exc}")
     else:
         sections = extract_text_from_pdf_bytes(pdf_bytes) if pdf_bytes else [(1, text_input.strip())]
         if not sections:
