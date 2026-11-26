@@ -1,0 +1,10 @@
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.db
+backend/generated_pdfs/*.pdf
+backend/.pytest_cache/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+.DS_Store

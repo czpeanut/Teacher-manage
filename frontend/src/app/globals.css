@@ -1,0 +1,185 @@
+@import "tailwindcss";
+
+/* A4 板書預覽專用樣式（與 PDF 渲染器完全一致） */
+.chalkboard-sheet {
+  background: #ffffff;
+  color: #111827;
+  font-family: "Noto Sans CJK TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.chalkboard-sheet .page-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: #334155;
+  border-bottom: 1.5px solid #94a3b8;
+  padding-bottom: 6px;
+  margin-bottom: 12px;
+  gap: 8px;
+}
+
+.chalkboard-sheet .meta-badge {
+  background: #111827;
+  color: #ffffff;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-right: 6px;
+}
+
+.chalkboard-sheet .meta-badge-prob {
+  background: #ffffff;
+  color: #111827;
+  border: 2px solid #111827;
+  font-weight: 800;
+  padding: 1px 7px;
+  border-radius: 4px;
+  margin-right: 6px;
+}
+
+.chalkboard-sheet .blackboard {
+  border: 3.5px solid #111827;
+  border-bottom: 6px solid #334155;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 16px 20px 20px 20px;
+}
+
+.chalkboard-sheet .board-grid {
+  display: grid;
+  grid-template-columns: 44% 53%;
+  gap: 3%;
+  align-items: stretch;
+}
+
+.chalkboard-sheet .board-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #111827;
+  margin: 0 0 10px 0;
+  line-height: 1.25;
+}
+
+.chalkboard-sheet .board-prob-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #111827;
+  margin: 0 0 10px 0;
+}
+
+.chalkboard-sheet .board-sub {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.75;
+}
+
+.chalkboard-sheet .board-sub div {
+  margin-bottom: 4px;
+}
+
+.chalkboard-sheet .cy {
+  color: #b45309;
+  background: #f1f5f9;
+  padding: 0 4px;
+  border-radius: 3px;
+  border-bottom: 2px dashed #b45309;
+  font-weight: 800;
+}
+
+.chalkboard-sheet .red-mark-box {
+  color: #111827;
+  border: 3px double #dc2626;
+  border-radius: 6px;
+  padding: 0 6px;
+  display: inline-block;
+  font-weight: 800;
+}
+
+.chalkboard-sheet .red-underline {
+  border-bottom: 3px double #dc2626;
+  padding-bottom: 1px;
+}
+
+.chalkboard-sheet .board-right {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+}
+
+.chalkboard-sheet .board-dashed-hr {
+  border: none;
+  border-top: 2px dashed #475569;
+  margin: 4px 0 6px 0;
+}
+
+.chalkboard-sheet .board-footer-note {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: #b45309;
+  background: #f8fafc;
+  border: 1.5px dashed #64748b;
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+.chalkboard-sheet .eq-box {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.8;
+}
+
+.chalkboard-sheet .frac {
+  display: inline-flex;
+  flex-direction: column;
+  vertical-align: middle;
+  text-align: center;
+  font-size: 0.84em;
+  line-height: 1.05;
+  margin: 0 3px;
+}
+
+.chalkboard-sheet .frac > span.num {
+  border-bottom: 1.6px solid currentColor;
+  padding: 0 4px 1px 4px;
+}
+
+.chalkboard-sheet .frac > span.den {
+  padding: 1px 4px 0 4px;
+}
+
+.chalkboard-sheet .teaching-notes {
+  margin-top: 12px;
+  background: #f8fafc;
+  border: 1.5px solid #cbd5e1;
+  border-left: 5px solid #1e293b;
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #1e293b;
+}
+
+.chalkboard-sheet .note-label {
+  font-weight: 800;
+  color: #0f172a;
+  font-size: 13px;
+  margin-bottom: 3px;
+  display: inline-block;
+  border-bottom: 2px solid #94a3b8;
+}
+
+.chalkboard-sheet .note-list {
+  margin: 4px 0 0 0;
+  padding-left: 18px;
+  list-style: disc;
+}
+
+.chalkboard-sheet svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
