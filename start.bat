@@ -20,7 +20,7 @@ if not exist "node_modules" (
 )
 
 echo [3/4] 啟動 FastAPI 後端 (Port 8000)...
-start "Teacher-Manage Backend" cmd /k "cd /d "%ROOT_DIR%backend" && .venv\Scripts\uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
+start "Teacher-Manage Backend" cmd /k "cd /d "%ROOT_DIR%backend" && .venv\Scripts\uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
 echo [4/4] 啟動 Next.js 前端 (Port 3000)...
 start "Teacher-Manage Frontend" cmd /k "cd /d "%ROOT_DIR%frontend" && npm run dev -- -p 3000"
