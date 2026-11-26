@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { FileUp, Loader2, Sparkles, X } from "lucide-react";
-import { API_BASE, getToken, Slide } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { CheckCircle2, FileUp, KeyRound, Loader2, Sparkles, X } from "lucide-react";
+import { API_BASE, apiFetch, getToken, Slide } from "@/lib/api";
 
 interface MaterialUploaderModalProps {
   onClose: () => void;
@@ -10,14 +10,34 @@ interface MaterialUploaderModalProps {
 }
 
 export default function MaterialUploaderModal({ onClose, onSuccess }: MaterialUploaderModalProps) {
-  const [unitCode, setUnitCode] = useState("G5-U11");
-  const [unitTitle, setUnitTitle] = useState("五上11 面積與體積進階");
-  const [gradeTerm, setGradeTerm] = useState("五上");
+  const [unitCode, setUnitCode] = useState("G5-NEW");
+  const [unitTitle, setUnitTitle] = useState("五下 分數應用與逆推");
+  const [gradeTerm, setGradeTerm] = useState("五下");
+  const [targetDuration, setTargetDuration] = useState(180);
+
+  const [useAi, setUseAi] = useState(true);
+  const [aiProvider, setAiProvider] = useState<"gemini" | "openai">("gemini");
+  const [apiKey, setApiKey] = useState("");
+  const [saveApiKey, setSaveApiKey] = useState(true);
+  const [aiStatus, setAiStatus] = useState<{ gemini_configured: boolean; openai_configured: boolean }>({
+    gemini_configured: false,
+    openai_configured: false,
+  });
+
   const [file, setFile] = useState<File | null>(null);
   const [rawText, setRawText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [previewSlides, setPreviewSlides] = useState<Omit<Slide, "id" | "unit_id">[] | null>(null);
+
+  useEffect(() => {
+    apiFetch<{ gemini_configured: boolean; openai_configured: boolean }>("/api/units/ai-status")
+      .then(setAiStatus)
+      .catch(() => {});
+  }, []);
+
+  const isKeyConfigured =
+    aiProvider === "gemini" ? aiStatus.gemini_configured : aiStatus.openai_configured;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,6 +49,14 @@ export default function MaterialUploaderModal({ onClose, onSuccess }: MaterialUp
       formData.append("unit_title", unitTitle);
       formData.append("grade_term", gradeTerm);
       formData.append("save_to_db", "true");
+      formData.append("use_ai", String(useAi));
+      formData.append("ai_provider", aiProvider);
+      formData.append("target_duration_min", String(targetDuration));
+      formData.append("save_api_key", String(saveApiKey));
+      if (apiKey.trim()) {
+        formData.append("api_key", apiKey.trim());
+      }
+
       if (file) {
         formData.append("file", file);
       } else if (rawText.trim()) {
@@ -63,7 +91,7 @@ export default function MaterialUploaderModal({ onClose, onSuccess }: MaterialUp
 
   return (
     <div className="fixed inset-0 bg-slate-950/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200">
+      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[92vh] overflow-y-auto shadow-2xl border border-slate-200">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
           <div>
             <h3 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
@@ -71,7 +99,7 @@ export default function MaterialUploaderModal({ onClose, onSuccess }: MaterialUp
               上傳教材自動組成備課板書
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              自動辨識 PDF / 文字中的觀念、演練、進階題型與頁碼，套用黑白三色粉筆規格入庫
+              AI 視覺引擎直接讀取 PDF 頁面（含直式分數與圖形），依《五上9》規格產出詳解與 SVG 板書
             </p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700 cursor-pointer">
@@ -86,7 +114,68 @@ export default function MaterialUploaderModal({ onClose, onSuccess }: MaterialUp
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* AI 引擎設定區 */}
+          <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 text-xs font-extrabold text-slate-900 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={useAi}
+                  onChange={(e) => setUseAi(e.target.checked)}
+                  className="rounded accent-slate-900"
+                />
+                啟用 AI 視覺教研引擎（推薦：完整辨識分數、自動解題、繪製 SVG 與撰寫速解）
+              </label>
+            </div>
+
+            {useAi && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">AI 模型供應商</label>
+                  <select
+                    value={aiProvider}
+                    onChange={(e) => setAiProvider(e.target.value as "gemini" | "openai")}
+                    className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs bg-white"
+                  >
+                    <option value="gemini">Google Gemini 2.5 Flash（推薦）</option>
+                    <option value="openai">OpenAI GPT-4o-mini</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <KeyRound className="w-3 h-3" />
+                      API Key
+                    </span>
+                    {isKeyConfigured && (
+                      <span className="text-emerald-700 flex items-center gap-0.5">
+                        <CheckCircle2 className="w-3 h-3" /> 已記憶於本機
+                      </span>
+                    )}
+                  </label>
+                  <input
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder={isKeyConfigured ? "已設定（留空沿用，或輸入覆蓋）" : "請貼上 API Key"}
+                    className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs bg-white"
+                  />
+                  <label className="flex items-center gap-1.5 text-[11px] text-slate-600 mt-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={saveApiKey}
+                      onChange={(e) => setSaveApiKey(e.target.checked)}
+                      className="rounded accent-slate-900"
+                    />
+                    記住此金鑰於本機（backend/.env）
+                  </label>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">單元代碼</label>
               <input
@@ -97,7 +186,7 @@ export default function MaterialUploaderModal({ onClose, onSuccess }: MaterialUp
                 required
               />
             </div>
-            <div>
+            <div className="sm:col-span-2">
               <label className="block text-xs font-bold text-slate-700 mb-1">單元名稱</label>
               <input
                 type="text"
@@ -108,6 +197,20 @@ export default function MaterialUploaderModal({ onClose, onSuccess }: MaterialUp
               />
             </div>
             <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">目標課時</label>
+              <select
+                value={targetDuration}
+                onChange={(e) => setTargetDuration(Number(e.target.value))}
+                className="w-full border border-slate-300 rounded-lg px-2.5 py-2 text-sm bg-white"
+              >
+                <option value={120}>2 小時</option>
+                <option value={180}>3 小時</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-center">
+            <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">年級學期</label>
               <input
                 type="text"
@@ -117,39 +220,38 @@ export default function MaterialUploaderModal({ onClose, onSuccess }: MaterialUp
                 required
               />
             </div>
-          </div>
-
-          <div className="border-2 border-dashed border-slate-300 rounded-xl p-4 bg-slate-50 text-center">
-            <label className="cursor-pointer block">
-              <FileUp className="w-6 h-6 text-slate-500 mx-auto mb-1" />
-              <span className="text-xs font-bold text-slate-700">
-                {file ? `已選擇：${file.name}` : "點擊選擇教材檔案（支援 .pdf / .txt / .md）"}
-              </span>
-              <input
-                type="file"
-                accept=".pdf,.txt,.md"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
-                className="hidden"
-              />
-            </label>
+            <div className="sm:col-span-3 border-2 border-dashed border-slate-300 rounded-xl p-3.5 bg-slate-50 text-center">
+              <label className="cursor-pointer block">
+                <FileUp className="w-5 h-5 text-slate-500 mx-auto mb-1" />
+                <span className="text-xs font-bold text-slate-700">
+                  {file ? `已選擇：${file.name}` : "點擊選擇教材檔案（支援 .pdf / .txt / .md）"}
+                </span>
+                <input
+                  type="file"
+                  accept=".pdf,.txt,.md"
+                  onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  className="hidden"
+                />
+              </label>
+            </div>
           </div>
 
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              或直接貼上教材文字（系統將自動依「觀念 / 演練 / 進階 / 資優」切分頁面）
+              或直接貼上教材文字（若已選擇 PDF 檔案則以此為主）
             </label>
             <textarea
-              rows={5}
+              rows={3}
               value={rawText}
               onChange={(e) => setRawText(e.target.value)}
-              placeholder={`觀念 1 平行四邊形面積 (P.90)\n核心公式：底 × 高\n速解：高必須垂直於底邊\n\n演練 1 P.91\n1. 底 12 公分、高 8 公分，面積 = 96`}
+              placeholder="貼上題目或觀念文字..."
               className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono"
             />
           </div>
 
           {previewSlides && (
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-900">
-              <span className="font-bold">解析並入庫成功！</span>共自動生成 {previewSlides.length} 頁板書（
+              <span className="font-bold">AI 組版並入庫成功！</span>共生成 {previewSlides.length} 頁板書（
               {previewSlides.map((s) => s.badge_text).join("、")}）。
             </div>
           )}
@@ -168,7 +270,7 @@ export default function MaterialUploaderModal({ onClose, onSuccess }: MaterialUp
               className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              自動解析並組成單元
+              {loading ? "AI 解析生成板書中（約 15~30 秒）..." : "自動解析並組成單元"}
             </button>
           </div>
         </form>

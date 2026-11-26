@@ -159,6 +159,7 @@ def test_full_api_workflow_and_pdf_generation():
                 "unit_title": "五上11 面積計算",
                 "grade_term": "五上",
                 "save_to_db": "true",
+                "use_ai": "false",
                 "raw_text": sample_material,
             },
         )
