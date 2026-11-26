@@ -137,7 +137,7 @@ export default function MaterialUploaderModal({ onClose, onSuccess }: MaterialUp
                     onChange={(e) => setAiProvider(e.target.value as "gemini" | "openai")}
                     className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs bg-white"
                   >
-                    <option value="gemini">Google Gemini 2.5 Flash（推薦）</option>
+                    <option value="gemini">Google Gemini（自動選用最新可用 Flash 模型）</option>
                     <option value="openai">OpenAI GPT-4o-mini</option>
                   </select>
                 </div>

@@ -126,6 +126,48 @@ def _extract_json_array(raw_text: str) -> list:
     return json.loads(cleaned)
 
 
+async def _resolve_gemini_models(client: httpx.AsyncClient, api_key: str) -> List[str]:
+    """動態向 Gemini API 查詢此 Key 實際可用的 generateContent 模型，避免寫死模型名稱導致 404。"""
+    preferred_order = [
+        "gemini-3.8-flash",
+        "gemini-3.5-flash",
+        "gemini-3.0-flash",
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+    ]
+    available: List[str] = []
+    try:
+        resp = await client.get(
+            f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}",
+            timeout=15.0,
+        )
+        if resp.status_code == 200:
+            for m in resp.json().get("models", []):
+                methods = m.get("supportedGenerationMethods", [])
+                if "generateContent" not in methods:
+                    continue
+                name = m.get("name", "").replace("models/", "")
+                if "gemini" in name and "embedding" not in name and "tts" not in name:
+                    available.append(name)
+    except Exception:
+        pass
+
+    if not available:
+        return preferred_order
+
+    # 優先選擇含 flash 且版本較新的模型，其餘 gemini 模型作為備援
+    flash_models = sorted([n for n in available if "flash" in n and "lite" not in n], reverse=True)
+    other_models = sorted([n for n in available if n not in flash_models], reverse=True)
+    ordered: List[str] = []
+    for p in preferred_order:
+        if p in available and p not in ordered:
+            ordered.append(p)
+    for n in flash_models + other_models:
+        if n not in ordered:
+            ordered.append(n)
+    return ordered[:5]
+
+
 async def generate_slides_with_ai(
     unit_title: str,
     target_duration_min: int = 180,
@@ -160,10 +202,7 @@ async def generate_slides_with_ai(
             for b64 in images_b64:
                 parts.append({"inline_data": {"mime_type": "image/png", "data": b64}})
 
-            url = (
-                "https://generativelanguage.googleapis.com/v1beta/models/"
-                f"gemini-2.5-flash:generateContent?key={effective_key}"
-            )
+            candidate_models = await _resolve_gemini_models(client, effective_key)
             payload = {
                 "contents": [{"parts": parts}],
                 "generationConfig": {
@@ -171,33 +210,55 @@ async def generate_slides_with_ai(
                     "responseMimeType": "application/json",
                 },
             }
-            resp = await client.post(url, json=payload)
-            if resp.status_code != 200:
-                raise RuntimeError(f"Gemini API 錯誤 ({resp.status_code}): {resp.text[:300]}")
-            data = resp.json()
-            text_out = data["candidates"][0]["content"]["parts"][0]["text"]
+
+            text_out = ""
+            last_err = ""
+            for model_name in candidate_models:
+                url = (
+                    "https://generativelanguage.googleapis.com/v1beta/models/"
+                    f"{model_name}:generateContent?key={effective_key}"
+                )
+                resp = await client.post(url, json=payload)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    text_out = data["candidates"][0]["content"]["parts"][0]["text"]
+                    break
+                last_err = f"{model_name} ({resp.status_code}): {resp.text[:300]}"
+                if resp.status_code not in (404, 400):
+                    raise RuntimeError(f"Gemini API 錯誤 {last_err}")
+
+            if not text_out:
+                raise RuntimeError(f"Gemini API 所有候選模型皆失敗，最後錯誤：{last_err}")
         elif provider == "openai":
             content_list: list = [{"type": "text", "text": user_prompt}]
             for b64 in images_b64:
                 content_list.append(
                     {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}", "detail": "high"}}
                 )
-            resp = await client.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={"Authorization": f"Bearer {effective_key}"},
-                json={
-                    "model": "gpt-4o-mini",
-                    "temperature": 0.2,
-                    "messages": [
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": content_list},
-                    ],
-                },
-            )
-            if resp.status_code != 200:
-                raise RuntimeError(f"OpenAI API 錯誤 ({resp.status_code}): {resp.text[:300]}")
-            data = resp.json()
-            text_out = data["choices"][0]["message"]["content"]
+            text_out = ""
+            last_err = ""
+            for model_name in ("gpt-4o-mini", "gpt-4o"):
+                resp = await client.post(
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {effective_key}"},
+                    json={
+                        "model": model_name,
+                        "temperature": 0.2,
+                        "messages": [
+                            {"role": "system", "content": SYSTEM_PROMPT},
+                            {"role": "user", "content": content_list},
+                        ],
+                    },
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    text_out = data["choices"][0]["message"]["content"]
+                    break
+                last_err = f"{model_name} ({resp.status_code}): {resp.text[:300]}"
+                if resp.status_code != 404:
+                    raise RuntimeError(f"OpenAI API 錯誤 {last_err}")
+            if not text_out:
+                raise RuntimeError(f"OpenAI API 所有候選模型皆失敗，最後錯誤：{last_err}")
         else:
             raise ValueError(f"不支援的 AI 供應商: {provider}")
 
