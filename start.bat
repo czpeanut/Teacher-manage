@@ -7,22 +7,33 @@ set ROOT_DIR=%~dp0
 echo [1/4] 檢查與建立 Python 後端虛擬環境...
 cd /d "%ROOT_DIR%backend"
 
-if not exist ".venv\Scripts\uvicorn.exe" (
+if not exist ".venv\Scripts\python.exe" (
     where py >nul 2>nul
     if %errorlevel%==0 (
         set PY_CMD=py -3
     ) else (
         set PY_CMD=python
     )
-    echo 使用 %PY_CMD% 建立虛擬環境與安裝套件，請稍候...
+    echo 使用 %PY_CMD% 建立虛擬環境...
     %PY_CMD% -m venv .venv
     if not exist ".venv\Scripts\python.exe" (
-        echo [錯誤] 找不到 Python 3！請先安裝 Python 3.10+ 並勾選 Add Python to PATH。
+        echo [錯誤] 找不到 Python 3！請先安裝 Python 3.10~3.13 並勾選 Add Python to PATH。
         pause
         exit /b 1
     )
+)
+
+.venv\Scripts\python.exe -c "import uvicorn, fastapi, playwright" >nul 2>nul
+if %errorlevel% neq 0 (
+    echo 正在安裝後端 Python 套件，請稍候...
     .venv\Scripts\python.exe -m pip install --upgrade pip
     .venv\Scripts\python.exe -m pip install -r requirements.txt
+    if %errorlevel% neq 0 (
+        echo.
+        echo [錯誤] Python 套件安裝失敗！請將上方紅色錯誤訊息截圖給我。
+        pause
+        exit /b 1
+    )
     .venv\Scripts\playwright.exe install chromium
 )
 
